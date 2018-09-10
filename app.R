@@ -1,7 +1,11 @@
 library(aRchery)
 library(shiny)
-source("R/gather-data.R")
+library(DT)
+library(openxlsx)
+library(dragulaR)
 options(shiny.maxRequestSize=3000*1024^2)
+
+source(dir("modules/", full.names = TRUE))
 
 ui <- fluidPage(
     titlePanel("Archery v0.0.2"),
@@ -9,18 +13,24 @@ ui <- fluidPage(
     sidebarLayout(
         sidebarPanel(
             fileInput("files", label = "Upload files", multiple = TRUE),
+            selectInput("Dates", label = "Selected dates", choices = NULL, multiple = TRUE),
             downloadButton("downloadData")
         ),
 
         # Show a plot of the generated distribution
         mainPanel(
-            DT::dataTableOutput("MainData")           
+            tabsetPanel(
+                tabPanel(title = "All data",DT::dataTableOutput("MainData")),
+                tabPanel(title = "Compare targets by days", compareTargetsModuleUI("TargetsByDay")),
+                tabPanel(title = "Daily plot", plotOutput("DailyPlot", width = "100%", height = 600)),
+                tabPanel(title = "Scale curve", plotOutput("ScaleCurve", width = "100%", height = 600))
+            )
         )
     )
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
+server <- function(input, output, session) {
 
     mainData <- reactive({
         req(input$files)
@@ -41,6 +51,42 @@ server <- function(input, output) {
             openxlsx::write.xlsx(mainData(), con)
         }
     )
+    
+    
+    ###### dates
+    
+    observe({
+        req(mainData())
+        choices <- sort(unique(mainData()[["Date"]]))
+        selected <-
+            na.omit(unique(c(
+                choices[1], 
+                choices[length(choices) / 2], 
+                choices[length(choices)]))
+            )
+        updateSelectInput("Dates",
+                          session = session,
+                          choices = choices,
+                          selected = selected)
+    })
+    
+    selectedDates <- reactive({
+        input$Dates
+    })
+    
+    ## compareTargetsModule
+    callModule(compareTargetsModule, id = "TargetsByDay", mainData = mainData, dates = selectedDates)
+    
+    output$ScaleCurve <- renderPlot({
+        req(mainData(), selectedDates())
+        dtAll <- mainData()[as.character(mainData()[["Date"]]) %in% selectedDates(), ]
+        aRchery::plot_scale_curves(dtAll, "Date")
+    })
+    
+    output$DailyPlot <- renderPlot({
+        req(mainData())
+        aRchery::plot_daily_total_points(mainData())
+    })
 }
 
 # Run the application 
