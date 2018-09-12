@@ -3,6 +3,8 @@ library(shiny)
 library(DT)
 library(openxlsx)
 library(dragulaR)
+library(readr)
+library(lubridate)
 options(shiny.maxRequestSize=3000*1024^2)
 
 source(dir("modules/", full.names = TRUE))
