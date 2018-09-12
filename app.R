@@ -6,6 +6,7 @@ pacman::p_load(openxlsx)
 pacman::p_load(dragulaR)
 pacman::p_load(readr)
 pacman::p_load(lubridate)
+pacman::p_load(dplyr)
 options(shiny.maxRequestSize=3000*1024^2)
 
 source(dir("modules/", full.names = TRUE))
@@ -26,7 +27,15 @@ ui <- fluidPage(
                 tabPanel(title = "All data",DT::dataTableOutput("MainData")),
                 tabPanel(title = "Compare targets by days", compareTargetsModuleUI("TargetsByDay")),
                 tabPanel(title = "Daily plot", plotOutput("DailyPlot", width = "100%", height = 600)),
-                tabPanel(title = "Scale curve", plotOutput("ScaleCurve", width = "100%", height = 600))
+                tabPanel(title = "Scale curve", plotOutput("ScaleCurve", width = "100%", height = 600)),
+                tabPanel(title = "Daily shot series", 
+                    selectInput(
+                        "NSeries",
+                        label = "Number of shots in group",
+                        choices = c(1,  2,  3,  4,  5,  6, 10, 12, 15, 20, 30), 
+                        selected = 12),    
+                    plotOutput("FncBoxPlot", width = "100%", height = 600)),
+                tabPanel(title = "Daily median shot", plotOutput("DailyMedians", width = "100%", height = 600))
             )
         )
     )
@@ -37,7 +46,7 @@ server <- function(input, output, session) {
 
     mainData <- reactive({
         req(input$files)
-        data <- read_archery_files(input$files$datapath)
+        data <- aRchery::read_archery_files(input$files$datapath)
         data
     })
     output$MainData <- DT::renderDataTable({
@@ -88,7 +97,19 @@ server <- function(input, output, session) {
     
     output$DailyPlot <- renderPlot({
         req(mainData())
-        aRchery::plot_daily_total_points(mainData())
+        aRchery::plot_daily_total_points(mainData(), size = 2)
+    })
+    
+    output$FncBoxPlot <- renderPlot({
+        req(mainData())
+        
+        dtMatrix12 <- fnc_by_n_shots(mainData(), as.numeric(input$NSeries))
+        plot_fnc_boxplot(dtMatrix12)
+    })
+    
+    output$DailyMedians <- renderPlot({
+        req(mainData())
+        aRchery::plot_medians_polygon(mainData())
     })
 }
 
